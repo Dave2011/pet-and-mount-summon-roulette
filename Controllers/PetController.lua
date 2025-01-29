@@ -72,6 +72,7 @@ function PetController:saveToPersistentStorage()
     end
 end
 
+
 function PetController:resetRarityGroup(rarityGroup)
     local resetCount = 0
     for _, pet in pairs(self.pets) do
