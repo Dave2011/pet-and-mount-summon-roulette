@@ -1,0 +1,13 @@
+## Interface: 110007
+## Title: Pet and Mount Summon Roulette
+## Notes: Summons a random battle pet or mount based on its rarity across the playerbase - Data provided by dataforazeroth.com
+## Author: Zalador
+## Version: 1.0
+## SavedVariables: MountRouletteDB
+
+Models/MountModel.lua
+Models/PetModel.lua
+Controllers/MountController.lua
+Controllers/PetController.lua
+PetMountSummonRoulette.lua
+PetMountSummonRouletteData.lua

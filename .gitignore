@@ -1,0 +1,6 @@
+.DS_Store
+PetMountSummonRoulette.code-workspace
+copy_addon.sh
+petlist.py
+mountlist.py
+.vscode
