@@ -34,6 +34,28 @@ function MountController:markSummoned(id)
     end
 end
 
+function MountController:getNextRarityGroup(currentRarityGroup)
+    print("called nextgroupchecker with currentRarityGroup: " .. currentRarityGroup)
+    local rarityGroups = self:getAllRarityGroups()
+    table.sort(rarityGroups) -- Ensure groups are in ascending order
+
+    local nextGroupIndex = nil
+
+    -- Find the index of the next rarity group
+    for i, group in ipairs(rarityGroups) do
+        if group == currentRarityGroup then
+            nextGroupIndex = i + 1
+            break
+        end
+    end
+
+    -- If no next group, loop back to the first group
+    if not nextGroupIndex or not rarityGroups[nextGroupIndex] then
+        nextGroupIndex = 1
+    end
+    return nextGroupIndex
+end
+
 function MountController:buildFromJournal(existingMounts)
     C_MountJournal.SetDefaultFilters()
     for i = 1, C_MountJournal.GetNumDisplayedMounts() do
@@ -97,7 +119,7 @@ function MountController:buildFromJournal(existingMounts)
                 isFlying  = true
                 isAquatic = true
             end
-
+            if rarity == 0 then rarity = 999 end
             self:addMount(Mount:new(mountID, name, isFlying, isGround, isAquatic, summoned, rarity))
         end
     end
@@ -147,8 +169,9 @@ function MountController:getRandomUnsummonedMountByRarity(rarityGroup, mountRidi
             end
         end
     end
+    print("unsummoned mountRidingCriteria: " .. mountRidingCriteria .. " rarityGroup: " .. rarityGroup .. " #candidates: " .. #candidates)
 
-    if #candidates > 0 then
+    if  #candidates > 0 then
         return candidates[math.random(1, #candidates)]
     end
 
@@ -169,8 +192,15 @@ function MountController:getRandomMountByRarity(rarityGroup, mountRidingCriteria
         end
     end
 
+    print("summoned mountRidingCriteria: " .. mountRidingCriteria .. " rarityGroup: " .. rarityGroup .. " #candidates: " .. #candidates)
+
     if #candidates > 0 then
         return candidates[math.random(1, #candidates)]
+    end
+
+    local nextRarityGroup = self:getNextRarityGroup(rarityGroup)
+    if nextRarityGroup then
+        return self:getRandomMountByRarity(nextRarityGroup, mountRidingCriteria)
     end
 
     return nil

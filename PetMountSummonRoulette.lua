@@ -69,22 +69,7 @@ local function summonRandomMount()
     table.sort(rarityGroups) -- Ensure groups are in ascending order
 
     local currentRarityGroup = MountRouletteDB.lastMountRarityGroup or rarityGroups[1]
-    local nextGroupIndex = nil
-
-    -- Find the index of the next rarity group
-    for i, group in ipairs(rarityGroups) do
-        if group == currentRarityGroup then
-            nextGroupIndex = i + 1
-            break
-        end
-    end
-
-    -- If no next group, loop back to the first group
-    if not nextGroupIndex or not rarityGroups[nextGroupIndex] then
-        nextGroupIndex = 1
-    end
-
-    local nextRarityGroup = rarityGroups[nextGroupIndex]
+    local nextRarityGroup = mountDB:getNextRarityGroup(currentRarityGroup)
     local mount = mountDB:getRandomUnsummonedMountByRarity(nextRarityGroup, mountRidingCriteria)
 
     if mount then
@@ -162,4 +147,9 @@ end
 SLASH_PMSRPET1 = "/pmsrpet"
 SlashCmdList["PMSRPET"] = function()
     summonRandomPet()
+end
+
+SLASH_PMSRPETDISMISS1 = "/pmsrpetdismiss"
+SlashCmdList["PMSRPETDISMISS"] = function()
+    C_PetBattles.ForceEnd()
 end

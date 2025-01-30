@@ -35,7 +35,6 @@ function PetController:markSummoned(id)
 end
 
 function PetController:buildFromJournal(existingPets)
-    C_PetJournal.ClearSearchFilter()
     for i = 1, C_PetJournal.GetNumPets() do
         local petID, speciesID, owned, customName, level, favorite, isRevoked, speciesName, icon, petType, companionID, tooltip, description, isWild, canBattle, isTradeable, isUnique, obtainable = C_PetJournal.GetPetInfoByIndex(i)
         
