@@ -88,6 +88,7 @@ local function summonRandomMount()
     local mount = mountDB:getRandomUnsummonedMountByRarity(nextRarityGroup, mountRidingCriteria)
 
     if mount then
+        print("Summoning " .. mount.name .. " from group " .. mount.rarity)
         C_MountJournal.SummonByID(mount.id)
         mountDB:markSummoned(mount.id)
         mountDB:saveToPersistentStorage()
@@ -121,6 +122,7 @@ local function summonRandomPet()
     local pet = petDB:getRandomUnsummonedPetByRarity(nextRarityGroup)
 
     if pet then
+        print("Summoning " .. pet.name .. " from group " .. pet.rarity)
         C_PetJournal.SummonPetByGUID(pet.id)
         petDB:markSummoned(pet.id)
         petDB:saveToPersistentStorage()
@@ -138,10 +140,19 @@ frame:SetScript("OnEvent", function(self, event, ...)
     if event == "PLAYER_LOGIN" then
         mountDB:buildFromJournal(MountRouletteDB.mounts or {})
         mountDB:saveToPersistentStorage()
+    end
+end)
+
+local frame = CreateFrame("Frame")
+frame:RegisterEvent("PET_JOURNAL_LIST_UPDATE")
+
+frame:SetScript("OnEvent", function(self, event)
+    if event == "PET_JOURNAL_LIST_UPDATE" then
         petDB:buildFromJournal(MountRouletteDB.pets or {})
         petDB:saveToPersistentStorage()
     end
 end)
+
 
 SLASH_PMSRMOUNT1 = "/pmsrmount"
 SlashCmdList["PMSRMOUNT"] = function()

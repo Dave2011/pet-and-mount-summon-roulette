@@ -154,7 +154,26 @@ function MountController:getRandomUnsummonedMountByRarity(rarityGroup, mountRidi
 
     -- No unsummoned mounts found; reset and retry
     self:resetRarityGroup(rarityGroup)
-    return self:getRandomUnsummonedMountByRarity(rarityGroup, mountRidingCriteria)
+    return self:getRandomMountByRarity(rarityGroup, mountRidingCriteria)
+end
+
+function MountController:getRandomMountByRarity(rarityGroup, mountRidingCriteria)
+    local candidates = {}
+    for _, mount in pairs(self.mounts) do
+        if mount.rarity == rarityGroup then
+            if (mountRidingCriteria == "aquatic" and mount.isAquatic) or
+               (mountRidingCriteria == "ground" and mount.isGround) or
+               (mountRidingCriteria == "flying" and mount.isFlying) then
+                table.insert(candidates, mount)
+            end
+        end
+    end
+
+    if #candidates > 0 then
+        return candidates[math.random(1, #candidates)]
+    end
+
+    return nil
 end
 
 function MountController:getAllRarityGroups()
