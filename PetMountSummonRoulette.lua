@@ -384,7 +384,7 @@ local function summonRandomPet()
     local selectedPet = getAndMoveRandomPet(rarityGroup)
 
     if selectedPet then
-        print("Summoning pet ID: " .. tostring(selectedPet.petID))  -- Fixed: Access mountID directly
+        print("Summoning pet from group " .. tostring(rarityGroup))  -- Fixed: Access mountID directly
         C_PetJournal.SummonPetByGUID(selectedPet.petID)
         MountRouletteDB.lastPetRarityGroup = rarityGroup
     else
