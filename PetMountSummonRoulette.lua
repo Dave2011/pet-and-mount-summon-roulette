@@ -366,7 +366,7 @@ local function summonRandomMount()
 
     if selectedMount then
         print("Summoning mount from group " .. tostring(rarityGroup))  -- Fixed: Access mountID directly
-        C_MountJournal.SummonByID(selectedMount.name)
+        C_MountJournal.SummonByID(selectedMount.mountID)
         if MountRouletteDB.lastMountRarityGroup and MountRouletteDB.lastMountRarityGroup[mountRidingCriteria] then
             MountRouletteDB.lastMountRarityGroup[mountRidingCriteria] = rarityGroup
         else
