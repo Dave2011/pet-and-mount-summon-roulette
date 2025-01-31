@@ -357,15 +357,26 @@ local function summonRandomMount()
     local mountRidingCriteria = getMountRidingCriteria()
 
     if not mountRidingCriteria then
-        print(ERR_MOUNT_NO_MOUNTS_ALLOWED) -- Default WoW warning message
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[PetAndMountSummonRoulette]|r " .. "No mounts allowed.")
         return
     end
 
-    local rarityGroup = getNextMountRarityGroup(MountRouletteDB.lastMountRarityGroup[mountRidingCriteria] or 0, mountRidingCriteria)
+    local lastMountRarityGroup = 0
+    
+    if MountRouletteDB.lastMountRarityGroup and MountRouletteDB.lastMountRarityGroup[mountRidingCriteria] then
+        lastMountRarityGroup = MountRouletteDB.lastMountRarityGroup[mountRidingCriteria]
+    else
+        MountRouletteDB.lastMountRarityGroup = {
+            ground = {},
+            flying = {},
+            aquatic = {}
+        }
+    end
+    local rarityGroup = getNextMountRarityGroup(lastMountRarityGroup, mountRidingCriteria)
     local selectedMount = getAndMoveRandomMount(rarityGroup, mountRidingCriteria)
 
     if selectedMount then
-        print("Summoning mount from group " .. tostring(rarityGroup))  -- Fixed: Access mountID directly
+        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[PetAndMountSummonRoulette]|r " .. "Summoning mount from group " .. tostring(rarityGroup))
         C_MountJournal.SummonByID(selectedMount.mountID)
         if MountRouletteDB.lastMountRarityGroup and MountRouletteDB.lastMountRarityGroup[mountRidingCriteria] then
             MountRouletteDB.lastMountRarityGroup[mountRidingCriteria] = rarityGroup
@@ -374,7 +385,7 @@ local function summonRandomMount()
             MountRouletteDB.lastMountRarityGroup[mountRidingCriteria] = rarityGroup
         end
     else
-        print("No mounts available for summoning.")
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[PetAndMountSummonRoulette]|r " .. "No mounts available for summoning.")
     end
 end
 
@@ -384,11 +395,11 @@ local function summonRandomPet()
     local selectedPet = getAndMoveRandomPet(rarityGroup)
 
     if selectedPet then
-        print("Summoning pet from group " .. tostring(rarityGroup))  -- Fixed: Access mountID directly
+        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[PetMountSummonRoulette]|r " .. "Summoning pet from group " .. tostring(rarityGroup))
         C_PetJournal.SummonPetByGUID(selectedPet.petID)
         MountRouletteDB.lastPetRarityGroup = rarityGroup
     else
-        print("No pets available for summoning.")
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[PetMountSummonRoulette]|r " .. "No pets available for summoning.")
     end
 end
 
@@ -400,6 +411,7 @@ frame:RegisterEvent("COMPANION_UPDATE")
 frame:SetScript("OnEvent", function(self, event, ...)
     if event == "PLAYER_LOGIN" then
         saveMountsToVariable()
+        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[PetAndMountSummonRoulette]|r " .. "Mount Database refreshed")
     end
 end)
 
@@ -409,6 +421,7 @@ frame:RegisterEvent("PET_JOURNAL_LIST_UPDATE")
 frame:SetScript("OnEvent", function(self, event)
     if event == "PET_JOURNAL_LIST_UPDATE" then
         savePetsToVariable()
+        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[PetAndMountSummonRoulette]|r " .. "Pet Database refreshed")
     end
 end)
 
