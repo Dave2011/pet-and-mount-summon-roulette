@@ -1,4 +1,10 @@
 
+---- ToDo:
+-- Fix PetdbUpdate message, shows too often
+-- Better naming for summon info. Show name of pet/mount, and percentage
+-- Group mounts so more of them are in one group. Ideally dynamic, like the 20 rarest in group one, next 40, and so on.
+-- clear filters before summoning, otherwise it will bug out and only summon what has been filtered.
+---
 MountRouletteDB = MountRouletteDB or {}
 
 MountRouletteDB.lastMountRarityGroup = MountRouletteDB.lastMountRarityGroup or nil
@@ -376,7 +382,7 @@ local function summonRandomMount()
     local selectedMount = getAndMoveRandomMount(rarityGroup, mountRidingCriteria)
 
     if selectedMount then
-        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[PetAndMountSummonRoulette]|r " .. "Summoning mount from group " .. tostring(rarityGroup))
+        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[PetAndMountSummonRoulette]|r " .. "Summoning a mount less than " .. tostring(rarityGroup) .. " of players own.")
         C_MountJournal.SummonByID(selectedMount.mountID)
         if MountRouletteDB.lastMountRarityGroup and MountRouletteDB.lastMountRarityGroup[mountRidingCriteria] then
             MountRouletteDB.lastMountRarityGroup[mountRidingCriteria] = rarityGroup
@@ -395,7 +401,7 @@ local function summonRandomPet()
     local selectedPet = getAndMoveRandomPet(rarityGroup)
 
     if selectedPet then
-        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[PetMountSummonRoulette]|r " .. "Summoning pet from group " .. tostring(rarityGroup))
+        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[PetMountSummonRoulette]|r " .. "Summoning a pet less than " .. tostring(rarityGroup) .. " of players own.")
         C_PetJournal.SummonPetByGUID(selectedPet.petID)
         MountRouletteDB.lastPetRarityGroup = rarityGroup
     else
@@ -411,17 +417,8 @@ frame:RegisterEvent("COMPANION_UPDATE")
 frame:SetScript("OnEvent", function(self, event, ...)
     if event == "PLAYER_LOGIN" then
         saveMountsToVariable()
-        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[PetAndMountSummonRoulette]|r " .. "Mount Database refreshed")
-    end
-end)
-
-local frame = CreateFrame("Frame")
-frame:RegisterEvent("PET_JOURNAL_LIST_UPDATE")
-
-frame:SetScript("OnEvent", function(self, event)
-    if event == "PET_JOURNAL_LIST_UPDATE" then
         savePetsToVariable()
-        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[PetAndMountSummonRoulette]|r " .. "Pet Database refreshed")
+        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[PetAndMountSummonRoulette]|r " .. "Mount & Pet Database refreshed")
     end
 end)
 
