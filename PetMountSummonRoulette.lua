@@ -10,7 +10,6 @@ MountRouletteDB = MountRouletteDB or {}
 MountRouletteDB.lastMountRarityGroup = MountRouletteDB.lastMountRarityGroup or nil
 MountRouletteDB.lastPetRarityGroup = MountRouletteDB.lastPetRarityGroup or nil
 
-
 local function getMountCriteria(mountTypeID) 
             --[[ mountID fly ground aqua desciption
                 230 0 1 0 for most ground mounts
@@ -63,11 +62,9 @@ local function getMountRarityGroup(mountID)
     for rarityLevel, mountList in pairs(PetMountSummonRouletteData.mounts) do
         for _, id in ipairs(mountList) do
             if id == mountID then
-                rarity = rarityLevel
-                break
+                return tonumber(rarityLevel)
             end
         end
-        if rarity > 0 then break end
     end
     return rarity
 end
@@ -77,11 +74,9 @@ local function getPetRarityGroup(petID)
     for rarityLevel, petList in pairs(PetMountSummonRouletteData.pets) do
         for _, id in ipairs(petList) do
             if id == petID then
-                rarity = rarityLevel
-                break
+                return tonumber(rarityLevel)
             end
         end
-        if rarity > 0 then break end
     end
     return rarity
 end
@@ -264,17 +259,37 @@ local function getAndMoveRandomPet(currentRarityGroup)
     end
 end
 
+local function countTotalItemsInTable(t)
+    local totalCount = 0
+    for _, subTable in pairs(t) do
+        if type(subTable) == "table" then
+            for _ in pairs(subTable) do
+                totalCount = totalCount + 1
+            end
+        end
+    end
+    return totalCount
+end
+
 local function saveMountsToVariable()
-  
-    if MountRouletteDB.mounts and MountRouletteDB.mounts.unsummoned and #MountRouletteDB.mounts.unsummoned > 0 then
+    local totalUnsummonedMounts = 0
+    if MountRouletteDB.mounts and MountRouletteDB.mounts.unsummoned then
+        totalUnsummonedMounts = countTotalItemsInTable(MountRouletteDB.mounts.unsummoned) or 0
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[PetAndMountSummonRoulette]|r " .. totalUnsummonedMounts .. " number of unsummoned mounts")
+    end
+    
+    if MountRouletteDB.mounts and MountRouletteDB.mounts.unsummoned and totalUnsummonedMounts > 0 then
         MountRouletteDB.mounts = MountRouletteDB.mounts or {
             summoned = { ground = {}, flying = {}, aquatic = {} },
             unsummoned = { ground = {}, flying = {}, aquatic = {} }
         }
+        
     else MountRouletteDB.mounts = {
         summoned = { ground = {}, flying = {}, aquatic = {} },
         unsummoned = { ground = {}, flying = {}, aquatic = {} }
-    } end
+    }
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[PetAndMountSummonRoulette]|r " .. "var does not exists")
+    end
 
     C_MountJournal.SetDefaultFilters()
     for i = 1, C_MountJournal.GetNumDisplayedMounts() do
@@ -286,7 +301,6 @@ local function saveMountsToVariable()
             local isGround, isFlying, isAquatic = getMountCriteria(mountTypeID)
 
             local rarityGroup = getMountRarityGroup(mountID)
-
             -- Save mount information in the appropriate category
             local mountData = {
                 name = name,
@@ -382,7 +396,7 @@ local function summonRandomMount()
     local selectedMount = getAndMoveRandomMount(rarityGroup, mountRidingCriteria)
 
     if selectedMount then
-        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[PetAndMountSummonRoulette]|r " .. "Summoning a mount less than " .. tostring(rarityGroup) .. " of players own.")
+        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[PetAndMountSummonRoulette]|r " .. "Summoning a mount less than " .. tostring(rarityGroup) .. "% of players own.")
         C_MountJournal.SummonByID(selectedMount.mountID)
         if MountRouletteDB.lastMountRarityGroup and MountRouletteDB.lastMountRarityGroup[mountRidingCriteria] then
             MountRouletteDB.lastMountRarityGroup[mountRidingCriteria] = rarityGroup
@@ -401,7 +415,7 @@ local function summonRandomPet()
     local selectedPet = getAndMoveRandomPet(rarityGroup)
 
     if selectedPet then
-        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[PetMountSummonRoulette]|r " .. "Summoning a pet less than " .. tostring(rarityGroup) .. " of players own.")
+        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[PetMountSummonRoulette]|r " .. "Summoning a pet less than " .. tostring(rarityGroup) .. "% of players own.")
         C_PetJournal.SummonPetByGUID(selectedPet.petID)
         MountRouletteDB.lastPetRarityGroup = rarityGroup
     else

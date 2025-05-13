@@ -1,6 +1,6 @@
-local PetMountSummonRouletteData = {
+PetMountSummonRouletteData = {
     pets = {
-        ["3"] = {
+        [3] = {
             92,
             93,
             94,
@@ -256,7 +256,7 @@ local PetMountSummonRouletteData = {
             4794,
             4804
         },
-        ["5"] = {
+        [5] = {
             188,
             258,
             264,
@@ -468,7 +468,7 @@ local PetMountSummonRouletteData = {
             4723,
             4728
         },
-        ["7"] = {
+        [7] = {
             146,
             172,
             234,
@@ -674,7 +674,7 @@ local PetMountSummonRouletteData = {
             4729,
             4759
         },
-        ["10"] = {
+        [10] = {
             49,
             57,
             58,
@@ -918,7 +918,7 @@ local PetMountSummonRouletteData = {
             4692,
             4695
         },
-        ["15"] = {
+        [15] = {
             42,
             56,
             69,
@@ -1251,7 +1251,7 @@ local PetMountSummonRouletteData = {
             4701,
             4762
         },
-        ["20"] = {
+        [20] = {
             116,
             128,
             157,
@@ -1439,7 +1439,7 @@ local PetMountSummonRouletteData = {
             4614,
             4615
         },
-        ["30"] = {
+        [30] = {
             46,
             84,
             85,
@@ -1660,7 +1660,7 @@ local PetMountSummonRouletteData = {
             4678,
             4694
         },
-        ["40"] = {
+        [40] = {
             39,
             41,
             64,
@@ -1818,7 +1818,7 @@ local PetMountSummonRouletteData = {
             4582,
             4599
         },
-        ["50"] = {
+        [50] = {
             40,
             44,
             45,
@@ -1906,7 +1906,7 @@ local PetMountSummonRouletteData = {
             4527,
             4570
         },
-        ["60"] = {
+        [60] = {
             43,
             51,
             55,
@@ -1949,7 +1949,7 @@ local PetMountSummonRouletteData = {
             3348,
             4265
         },
-        ["70"] = {
+        [70] = {
             89,
             90,
             325,
@@ -1963,7 +1963,7 @@ local PetMountSummonRouletteData = {
             3013,
             3044
         },
-        ["80"] = {
+        [80] = {
             162,
             203,
             244,
@@ -1972,20 +1972,18 @@ local PetMountSummonRouletteData = {
             1804,
             1934
         },
-        ["90"] = {
+        [90] = {
             160,
             250,
             847,
             1720,
             2798
         },
-        ["100"] = {
-        },
-        ["nodata"] = {
+        [100] = {
         },
     },
     mounts = {
-        ["3"] = {
+        [3] = {
             8,
             42,
             43,
@@ -2155,7 +2153,7 @@ local PetMountSummonRouletteData = {
             2529,
             2535
         },
-        ["5"] = {
+        [5] = {
             338,
             400,
             488,
@@ -2255,7 +2253,7 @@ local PetMountSummonRouletteData = {
             2308,
             2508
         },
-        ["7"] = {
+        [7] = {
             298,
             301,
             331,
@@ -2350,7 +2348,7 @@ local PetMountSummonRouletteData = {
             2474,
             2482
         },
-        ["10"] = {
+        [10] = {
             265,
             294,
             295,
@@ -2476,7 +2474,7 @@ local PetMountSummonRouletteData = {
             2483,
             2495
         },
-        ["15"] = {
+        [15] = {
             55,
             237,
             288,
@@ -2636,7 +2634,7 @@ local PetMountSummonRouletteData = {
             2488,
             2491
         },
-        ["20"] = {
+        [20] = {
             69,
             108,
             109,
@@ -2782,7 +2780,7 @@ local PetMountSummonRouletteData = {
             2480,
             2489
         },
-        ["30"] = {
+        [30] = {
             151,
             153,
             154,
@@ -2992,7 +2990,7 @@ local PetMountSummonRouletteData = {
             2296,
             2329
         },
-        ["40"] = {
+        [40] = {
             202,
             205,
             219,
@@ -3077,7 +3075,7 @@ local PetMountSummonRouletteData = {
             2244,
             2249
         },
-        ["50"] = {
+        [50] = {
             75,
             76,
             77,
@@ -3163,7 +3161,7 @@ local PetMountSummonRouletteData = {
             2142,
             2214
         },
-        ["60"] = {
+        [60] = {
             24,
             25,
             36,
@@ -3233,7 +3231,7 @@ local PetMountSummonRouletteData = {
             1686,
             2238
         },
-        ["70"] = {
+        [70] = {
             6,
             9,
             11,
@@ -3279,14 +3277,14 @@ local PetMountSummonRouletteData = {
             1357,
             2144
         },
-        ["80"] = {
+        [80] = {
             18,
             19,
             1302,
             1588,
             1830
         },
-        ["90"] = {
+        [90] = {
             17,
             83,
             221,
@@ -3294,13 +3292,11 @@ local PetMountSummonRouletteData = {
             780,
             1458
         },
-        ["100"] = {
+        [100] = {
             1563,
             1589,
             1590,
             1591
-        },
-        ["nodata"] = {
         },
     }
 }
