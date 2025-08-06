@@ -4,3 +4,4 @@ copy_addon.sh
 petlist.py
 mountlist.py
 .vscode
+FEATURES.md

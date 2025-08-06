@@ -101,7 +101,7 @@ local function getMountCriteria(mountTypeID)
             return isGround, isFlying, isAquatic
 end
 
-local function getMountRarityGroup(mountID)
+function getMountRarityGroup(mountID)
     local rarity = 0 -- code for mounts that are not in the rarity DB yet
     for rarityLevel, mountList in pairs(PetMountSummonRouletteData.mounts) do
         for _, id in ipairs(mountList) do
@@ -113,7 +113,7 @@ local function getMountRarityGroup(mountID)
     return rarity
 end
 
-local function getPetRarityGroup(petID)
+function getPetRarityGroup(petID)
     local rarity = 0 -- code for mounts that are not in the rarity DB yet
     for rarityLevel, petList in pairs(PetMountSummonRouletteData.pets) do
         for _, id in ipairs(petList) do
@@ -125,7 +125,7 @@ local function getPetRarityGroup(petID)
     return rarity
 end
 
-local function getNextMountRarityGroup(currentRarityGroup, mountType)
+function getNextMountRarityGroup(currentRarityGroup, mountType)
     -- Ensure mountType is valid
     if not MountRouletteDB.mounts.unsummoned[mountType] then
         error("Invalid mount type: " .. tostring(mountType))
@@ -167,7 +167,7 @@ local function getNextMountRarityGroup(currentRarityGroup, mountType)
     return rarityGroups[nextIndex]
 end
 
-local function getNextPetRarityGroup(currentRarityGroup)
+function getNextPetRarityGroup(currentRarityGroup)
     
     -- Extract all rarity groups for the given mount type
     local rarityGroups = {}
@@ -205,7 +205,7 @@ local function getNextPetRarityGroup(currentRarityGroup)
     return rarityGroups[nextIndex]
 end
 
-local function getAndMoveRandomMount(currentRarityGroup, mountType)
+function getAndMoveRandomMount(currentRarityGroup, mountType)
     -- Ensure mountType is valid
     if not MountRouletteDB.mounts.unsummoned[mountType] then
         error("Invalid mount type: " .. tostring(mountType))
@@ -256,7 +256,7 @@ local function getAndMoveRandomMount(currentRarityGroup, mountType)
     end
 end
 
-local function getAndMoveRandomPet(currentRarityGroup)
+function getAndMoveRandomPet(currentRarityGroup)
 
      -- Get the next rarity group
     local nextRarityGroup = getNextPetRarityGroup(currentRarityGroup)
@@ -303,7 +303,7 @@ local function getAndMoveRandomPet(currentRarityGroup)
     end
 end
 
-local function countTotalItemsInTable(t)
+function countTotalItemsInTable(t)
     local totalCount = 0
     for _, subTable in pairs(t) do
         if type(subTable) == "table" then
@@ -315,7 +315,7 @@ local function countTotalItemsInTable(t)
     return totalCount
 end
 
-local function saveMountsToVariable()
+function saveMountsToVariable()
     local totalUnsummonedMounts = 0
     if MountRouletteDB.mounts and MountRouletteDB.mounts.unsummoned then
         totalUnsummonedMounts = countTotalItemsInTable(MountRouletteDB.mounts.unsummoned) or 0
@@ -367,7 +367,7 @@ local function saveMountsToVariable()
     end
 end
 
-local function savePetsToVariable()
+function savePetsToVariable()
     local totalUnsummonedPets = 0
     if MountRouletteDB.pets and MountRouletteDB.pets.unsummoned then
         totalUnsummonedPets = countTotalItemsInTable(MountRouletteDB.pets.unsummoned) or 0
@@ -388,8 +388,7 @@ local function savePetsToVariable()
     end
 
     -- Clear pet journal filters to ensure we see all pets
-    C_PetJournal.SetAllPetTypesFilter(true)
-    C_PetJournal.SetAllPetSourcesFilter(true)
+    C_PetJournal.SetAllPetTypesChecked(true)
     C_PetJournal.ClearSearchFilter()
     
     local totalPetsFound = 0
@@ -414,7 +413,7 @@ local function savePetsToVariable()
     DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[PetAndMountSummonRoulette]|r " .. totalPetsFound .. " pets loaded into database")
 end
 
-local function getMountRidingCriteria()
+function getMountRidingCriteria()
     if IsIndoors() or UnitOnTaxi("player") then
         return nil -- Mounting is completely disabled
     end
@@ -434,7 +433,7 @@ local function getMountRidingCriteria()
     return nil -- Fallback case: No valid mount criteria
 end
 
-local function summonRandomMount()
+function summonRandomMount()
     -- Check if mount summoning is enabled
     if not isFeatureEnabled("mounts") then
         DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[PetAndMountSummonRoulette]|r " .. "Mount summoning is disabled in options.")
@@ -482,7 +481,7 @@ local function summonRandomMount()
     end
 end
 
-local function summonRandomPet()
+function summonRandomPet()
     -- Check if pet summoning is enabled
     if not isFeatureEnabled("pets") then
         DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[PetAndMountSummonRoulette]|r " .. "Pet summoning is disabled in options.")
@@ -508,7 +507,7 @@ local function summonRandomPet()
 end
 
 
-local frame = CreateFrame("Frame")
+frame = CreateFrame("Frame")
 frame:RegisterEvent("PLAYER_LOGIN")
 frame:RegisterEvent("COMPANION_UPDATE")
 
@@ -559,8 +558,8 @@ end
 function SetOptionsPanel(panel)
     optionsPanel = panel
     DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[PetAndMountSummonRoulette]|r Options panel ready! Use /pmsroptions to open")
-end-
-- Debug command to check pet database status
+end
+-- Debug command to check pet database status
 SLASH_PMSRDEBUG1 = "/pmsrdebug"
 SlashCmdList["PMSRDEBUG"] = function()
     DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[PetAndMountSummonRoulette]|r === DEBUG INFO ===")

@@ -1,4 +1,4 @@
-local PetMountSummonRouletteData = {
+PetMountSummonRouletteData = {
     pets = {
         ["3"] = {
             92,
