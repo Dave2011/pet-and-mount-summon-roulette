@@ -10,6 +10,50 @@ MountRouletteDB = MountRouletteDB or {}
 MountRouletteDB.lastMountRarityGroup = MountRouletteDB.lastMountRarityGroup or nil
 MountRouletteDB.lastPetRarityGroup = MountRouletteDB.lastPetRarityGroup or nil
 
+-- Helper functions for new options system
+local function getConfiguredRarityGroup(itemID, isMount)
+    -- First check if we have a configured group for this item
+    if MountRouletteDB.config and MountRouletteDB.config.rarityGroups then
+        local originalRarity = isMount and getMountRarityGroup(itemID) or getPetRarityGroup(itemID)
+        
+        -- Find which configured group this item belongs to
+        for i, group in ipairs(MountRouletteDB.config.rarityGroups) do
+            if group.enabled and originalRarity >= group.minPercent and originalRarity < group.maxPercent then
+                return i -- Return the group index as the new rarity group
+            end
+        end
+    end
+    
+    -- Fallback to original system
+    return isMount and getMountRarityGroup(itemID) or getPetRarityGroup(itemID)
+end
+
+local function getEnabledRarityGroups()
+    if MountRouletteDB.config and MountRouletteDB.config.rarityGroups then
+        local enabledGroups = {}
+        for i, group in ipairs(MountRouletteDB.config.rarityGroups) do
+            if group.enabled then
+                table.insert(enabledGroups, i)
+            end
+        end
+        return enabledGroups
+    end
+    
+    -- Fallback to original groups
+    return {3, 5, 7, 10, 15, 20, 30, 40}
+end
+
+local function isFeatureEnabled(featureType)
+    if MountRouletteDB.config then
+        if featureType == "mounts" then
+            return MountRouletteDB.config.enableMounts ~= false
+        elseif featureType == "pets" then
+            return MountRouletteDB.config.enablePets ~= false
+        end
+    end
+    return true -- Default to enabled
+end
+
 local function getMountCriteria(mountTypeID) 
             --[[ mountID fly ground aqua desciption
                 230 0 1 0 for most ground mounts
@@ -300,7 +344,7 @@ local function saveMountsToVariable()
 
             local isGround, isFlying, isAquatic = getMountCriteria(mountTypeID)
 
-            local rarityGroup = getMountRarityGroup(mountID)
+            local rarityGroup = getConfiguredRarityGroup(mountID, true)
             -- Save mount information in the appropriate category
             local mountData = {
                 name = name,
@@ -324,33 +368,50 @@ local function saveMountsToVariable()
 end
 
 local function savePetsToVariable()
-  
-    if MountRouletteDB.pets and MountRouletteDB.pets.unsummoned and #MountRouletteDB.pets.unsummoned > 0 then
+    local totalUnsummonedPets = 0
+    if MountRouletteDB.pets and MountRouletteDB.pets.unsummoned then
+        totalUnsummonedPets = countTotalItemsInTable(MountRouletteDB.pets.unsummoned) or 0
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[PetAndMountSummonRoulette]|r " .. totalUnsummonedPets .. " number of unsummoned pets")
+    end
+    
+    if MountRouletteDB.pets and MountRouletteDB.pets.unsummoned and totalUnsummonedPets > 0 then
         MountRouletteDB.pets = MountRouletteDB.pets or {
             summoned = { },
             unsummoned = { }
         }
-    else MountRouletteDB.pets = {
-        summoned = { },
-        unsummoned = { }
-    } end
+    else 
+        MountRouletteDB.pets = {
+            summoned = { },
+            unsummoned = { }
+        }
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[PetAndMountSummonRoulette]|r " .. "Pet database reset")
+    end
 
-    C_MountJournal.SetDefaultFilters()
+    -- Clear pet journal filters to ensure we see all pets
+    C_PetJournal.SetAllPetTypesFilter(true)
+    C_PetJournal.SetAllPetSourcesFilter(true)
+    C_PetJournal.ClearSearchFilter()
+    
+    local totalPetsFound = 0
     for i = 1, C_PetJournal.GetNumPets() do
         local petID, speciesID, owned, customName, level, favorite, isRevoked, speciesName, icon, petType, companionID, tooltip, description, isWild, canBattle, isTradeable, isUnique, obtainable = C_PetJournal.GetPetInfoByIndex(i)
 
         if speciesID and owned then
-           local rarityGroup = getPetRarityGroup(speciesID)
+            local rarityGroup = getConfiguredRarityGroup(speciesID, false)
+            totalPetsFound = totalPetsFound + 1
 
-            -- Save mount information in the appropriate category
+            -- Save pet information in the appropriate category
             local petData = {
                 name = speciesName,
-                petID = petID
+                petID = petID,
+                speciesID = speciesID
             }
             MountRouletteDB.pets.unsummoned[rarityGroup] = MountRouletteDB.pets.unsummoned[rarityGroup] or {}
             MountRouletteDB.pets.unsummoned[rarityGroup][petID] = petData
         end
     end
+    
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[PetAndMountSummonRoulette]|r " .. totalPetsFound .. " pets loaded into database")
 end
 
 local function getMountRidingCriteria()
@@ -374,6 +435,12 @@ local function getMountRidingCriteria()
 end
 
 local function summonRandomMount()
+    -- Check if mount summoning is enabled
+    if not isFeatureEnabled("mounts") then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[PetAndMountSummonRoulette]|r " .. "Mount summoning is disabled in options.")
+        return
+    end
+
     local mountRidingCriteria = getMountRidingCriteria()
 
     if not mountRidingCriteria then
@@ -396,7 +463,13 @@ local function summonRandomMount()
     local selectedMount = getAndMoveRandomMount(rarityGroup, mountRidingCriteria)
 
     if selectedMount then
-        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[PetAndMountSummonRoulette]|r " .. "Summoning a mount less than " .. tostring(rarityGroup) .. "% of players own.")
+        -- Get group name for better messaging
+        local groupName = "Unknown"
+        if MountRouletteDB.config and MountRouletteDB.config.rarityGroups and MountRouletteDB.config.rarityGroups[rarityGroup] then
+            groupName = MountRouletteDB.config.rarityGroups[rarityGroup].name
+        end
+        
+        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[PetAndMountSummonRoulette]|r " .. "Summoning " .. selectedMount.name .. " from " .. groupName .. " group.")
         C_MountJournal.SummonByID(selectedMount.mountID)
         if MountRouletteDB.lastMountRarityGroup and MountRouletteDB.lastMountRarityGroup[mountRidingCriteria] then
             MountRouletteDB.lastMountRarityGroup[mountRidingCriteria] = rarityGroup
@@ -410,12 +483,23 @@ local function summonRandomMount()
 end
 
 local function summonRandomPet()
+    -- Check if pet summoning is enabled
+    if not isFeatureEnabled("pets") then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[PetAndMountSummonRoulette]|r " .. "Pet summoning is disabled in options.")
+        return
+    end
 
     local rarityGroup = getNextPetRarityGroup(MountRouletteDB.lastPetRarityGroup or 0)
     local selectedPet = getAndMoveRandomPet(rarityGroup)
 
     if selectedPet then
-        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[PetMountSummonRoulette]|r " .. "Summoning a pet less than " .. tostring(rarityGroup) .. "% of players own.")
+        -- Get group name for better messaging
+        local groupName = "Unknown"
+        if MountRouletteDB.config and MountRouletteDB.config.rarityGroups and MountRouletteDB.config.rarityGroups[rarityGroup] then
+            groupName = MountRouletteDB.config.rarityGroups[rarityGroup].name
+        end
+        
+        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[PetMountSummonRoulette]|r " .. "Summoning " .. selectedPet.name .. " from " .. groupName .. " group.")
         C_PetJournal.SummonPetByGUID(selectedPet.petID)
         MountRouletteDB.lastPetRarityGroup = rarityGroup
     else
@@ -450,4 +534,74 @@ end
 SLASH_PMSRPETDISMISS1 = "/pmsrpetdismiss"
 SlashCmdList["PMSRPETDISMISS"] = function()
     C_PetBattles.ForceEnd()
+end
+
+-- Global reference to our options panel
+local optionsPanel = nil
+
+SLASH_PMSROPTIONS1 = "/pmsroptions"
+SLASH_PMSROPTIONS2 = "/pmsrconfig"
+SlashCmdList["PMSROPTIONS"] = function()
+    -- Direct panel access - most reliable method
+    if optionsPanel then
+        if optionsPanel:IsShown() then
+            optionsPanel:Hide()
+        else
+            optionsPanel:Show()
+            optionsPanel:Raise() -- Bring to front
+        end
+    else
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[PetAndMountSummonRoulette]|r Options panel not loaded yet. Try again in a moment or /reload")
+    end
+end
+
+-- Function to set the global panel reference (called from options file)
+function SetOptionsPanel(panel)
+    optionsPanel = panel
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[PetAndMountSummonRoulette]|r Options panel ready! Use /pmsroptions to open")
+end-
+- Debug command to check pet database status
+SLASH_PMSRDEBUG1 = "/pmsrdebug"
+SlashCmdList["PMSRDEBUG"] = function()
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[PetAndMountSummonRoulette]|r === DEBUG INFO ===")
+    
+    -- Check if pet database exists
+    if MountRouletteDB.pets and MountRouletteDB.pets.unsummoned then
+        local totalPets = countTotalItemsInTable(MountRouletteDB.pets.unsummoned)
+        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[PetAndMountSummonRoulette]|r Total pets in database: " .. totalPets)
+        
+        -- Show pets by group
+        for groupId, pets in pairs(MountRouletteDB.pets.unsummoned) do
+            local count = 0
+            for _ in pairs(pets) do
+                count = count + 1
+            end
+            local groupName = "Group " .. groupId
+            if MountRouletteDB.config and MountRouletteDB.config.rarityGroups and MountRouletteDB.config.rarityGroups[groupId] then
+                groupName = MountRouletteDB.config.rarityGroups[groupId].name
+            end
+            DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[PetAndMountSummonRoulette]|r " .. groupName .. ": " .. count .. " pets")
+        end
+    else
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[PetAndMountSummonRoulette]|r Pet database not initialized!")
+    end
+    
+    -- Check configuration
+    if MountRouletteDB.config and MountRouletteDB.config.rarityGroups then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[PetAndMountSummonRoulette]|r Configuration groups: " .. #MountRouletteDB.config.rarityGroups)
+        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[PetAndMountSummonRoulette]|r Pets enabled: " .. tostring(MountRouletteDB.config.enablePets))
+    else
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[PetAndMountSummonRoulette]|r Configuration not loaded!")
+    end
+    
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[PetAndMountSummonRoulette]|r === END DEBUG ===")
+end
+
+-- Force refresh command
+SLASH_PMSRREFRESH1 = "/pmsrrefresh"
+SlashCmdList["PMSRREFRESH"] = function()
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[PetAndMountSummonRoulette]|r Refreshing pet and mount databases...")
+    saveMountsToVariable()
+    savePetsToVariable()
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[PetAndMountSummonRoulette]|r Database refresh complete!")
 end
