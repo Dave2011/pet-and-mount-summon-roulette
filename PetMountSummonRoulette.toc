@@ -1,12 +1,11 @@
-## Interface: 110200, 110107
+## Interface: 110207, 120000
 ## Title: Pet & Mount Summon Roulette
 ## IconTexture: Interface\AddOns\PetMountSummonRoulette\icon
 ## Notes: Summons a random battle pet or mount based on its rarity across the playerbase - Data provided by dataforazeroth.com
 ## Author: Zalador
-## Version: 1.1
+## Version: 1.2
 ## SavedVariables: MountRouletteDB
 
 
 PetMountSummonRoulette.lua
 PetMountSummonRouletteData.lua
-PetMountSummonRouletteOptions.lua

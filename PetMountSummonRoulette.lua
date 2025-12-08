@@ -1,606 +1,389 @@
 
----- ToDo:
--- Fix PetdbUpdate message, shows too often
--- Better naming for summon info. Show name of pet/mount, and percentage
--- Group mounts so more of them are in one group. Ideally dynamic, like the 20 rarest in group one, next 40, and so on.
--- clear filters before summoning, otherwise it will bug out and only summon what has been filtered.
----
+-- Pet & Mount Summon Roulette
+-- Author: Zalador (Updated by Antigravity)
+-- Data provided by dataforazeroth.com
+
 MountRouletteDB = MountRouletteDB or {}
+local ADDON_NAME = "PetMountSummonRoulette"
 
-MountRouletteDB.lastMountRarityGroup = MountRouletteDB.lastMountRarityGroup or nil
-MountRouletteDB.lastPetRarityGroup = MountRouletteDB.lastPetRarityGroup or nil
+-- Constants
+local RARE_GROUP_SIZE = 20
+local RARITY_THRESHOLD = 50.0
 
--- Helper functions for new options system
-local function getConfiguredRarityGroup(itemID, isMount)
-    -- First check if we have a configured group for this item
-    if MountRouletteDB.config and MountRouletteDB.config.rarityGroups then
-        local originalRarity = isMount and getMountRarityGroup(itemID) or getPetRarityGroup(itemID)
-        
-        -- Find which configured group this item belongs to
-        for i, group in ipairs(MountRouletteDB.config.rarityGroups) do
-            if group.enabled and originalRarity >= group.minPercent and originalRarity < group.maxPercent then
-                return i -- Return the group index as the new rarity group
-            end
-        end
-    end
-    
-    -- Fallback to original system
-    return isMount and getMountRarityGroup(itemID) or getPetRarityGroup(itemID)
+-- State
+local sessionState = {
+    mountGroups = {}, -- [groupIndex] = { {mountID=123, name="...", mountTypeID=...}, ... }
+    petGroups = {},
+    currentMountGroup = 1,
+    currentPetGroup = 1,
+    mountsInitialized = false,
+    petsInitialized = false
+}
+
+-- Utility: Print to Chat
+local function PrintMessage(msg)
+    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[" .. ADDON_NAME .. "]|r " .. msg)
 end
 
-local function getEnabledRarityGroups()
-    if MountRouletteDB.config and MountRouletteDB.config.rarityGroups then
-        local enabledGroups = {}
-        for i, group in ipairs(MountRouletteDB.config.rarityGroups) do
-            if group.enabled then
-                table.insert(enabledGroups, i)
-            end
-        end
-        return enabledGroups
-    end
-    
-    -- Fallback to original groups
-    return {3, 5, 7, 10, 15, 20, 30, 40}
+local function PrintError(msg)
+    DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[" .. ADDON_NAME .. "]|r " .. msg)
 end
 
-local function isFeatureEnabled(featureType)
-    if MountRouletteDB.config then
-        if featureType == "mounts" then
-            return MountRouletteDB.config.enableMounts ~= false
-        elseif featureType == "pets" then
-            return MountRouletteDB.config.enablePets ~= false
-        end
+-- Sorting Comparator: Rarity Ascending (Rare -> Common), Name Ascending as tie breaker
+local function RaritySort(a, b)
+    if a.rarity ~= b.rarity then
+        return (a.rarity or 100) < (b.rarity or 100)
     end
-    return true -- Default to enabled
+    return (a.name or "") < (b.name or "")
 end
 
-local function getMountCriteria(mountTypeID) 
-            --[[ mountID fly ground aqua desciption
-                230 0 1 0 for most ground mounts
-                231 0 1 0 for  [Riding Turtle] and  [Sea Turtle]
-                232 0 0 1 for  [Vashj'ir Seahorse] (was named Abyssal Seahorse prior to Warlords of Draenor)
-                241 0 0 0 for Blue, Green, Red, and Yellow Qiraji Battle Tank (restricted to use inside Temple of Ahn'Qiraj)
-                242 0 0 0 for Swift Spectral Gryphon (hidden in the mount journal, used while dead in certain zones)
-                247 1 0 0 for  [Disc of the Red Flying Cloud]
-                248 1 0 0 for most flying mounts, including those that change capability based on riding skill
-                254 0 0 1 for  [Reins of Poseidus],  [Brinedeep Bottom-Feeder] and  [Fathom Dweller]
-                269 0 1 0 for  [Reins of the Azure Water Strider] and  [Reins of the Crimson Water Strider]
-                284 0 1 0 for  [Chauffeured Chopper] and Chauffeured Mechano-Hog
-                398 1 0 0 for  [Kua'fon's Harness]
-                402 1 0 0 for Dragonriding
-                407 1 1 1 for  [Deepstar Polyp] and  [Otterworldly Ottuk Carrier]
-                408 0 1 0 for  [Unsuccessful Prototype Fleetpod]
-                412 0 1 1 for Otto and Ottuk
-                424 1 0 0 for Dragonriding mounts, including mounts that have dragonriding animations but are not yet enabled for dragonriding.
-                436 1 0 1 for Wondrous Wavewhisker ]]
-            --
-            local isGround, isFlying, isAquatic = false, false, false
-
-            if (mountTypeID == 230 or mountTypeID == 231 or mountTypeID == 269 or mountTypeID == 284 or mountTypeID == 408) then
-                isGround = true
-
-            elseif (mountTypeID == 232 or mountTypeID == 254) then 
-                isAquatic = true
-
-            elseif (mountTypeID == 247 or mountTypeID == 248 or mountTypeID == 398 or mountTypeID == 402 or mountTypeID == 424 ) then
-                isFlying = true
-
-            elseif mountTypeID == 412 then
-                isGround  = true
-                isAquatic = true
-
-            elseif mountTypeID == 436 then
-                isFlying  = true
-                isAquatic = true
-
-            elseif mountTypeID == 407 then
-                isGround  = true
-                isFlying  = true
-                isAquatic = true
-            end
-            return isGround, isFlying, isAquatic
-end
-
-function getMountRarityGroup(mountID)
-    local rarity = 0 -- code for mounts that are not in the rarity DB yet
-    for rarityLevel, mountList in pairs(PetMountSummonRouletteData.mounts) do
-        for _, id in ipairs(mountList) do
-            if id == mountID then
-                return tonumber(rarityLevel)
-            end
-        end
-    end
-    return rarity
-end
-
-function getPetRarityGroup(petID)
-    local rarity = 0 -- code for mounts that are not in the rarity DB yet
-    for rarityLevel, petList in pairs(PetMountSummonRouletteData.pets) do
-        for _, id in ipairs(petList) do
-            if id == petID then
-                return tonumber(rarityLevel)
-            end
-        end
-    end
-    return rarity
-end
-
-function getNextMountRarityGroup(currentRarityGroup, mountType)
-    -- Ensure mountType is valid
-    if not MountRouletteDB.mounts.unsummoned[mountType] then
-        error("Invalid mount type: " .. tostring(mountType))
-    end
-
-    -- Extract all rarity groups for the given mount type
-    local rarityGroups = {}
-    for rarityGroup in pairs(MountRouletteDB.mounts.unsummoned[mountType]) do
-        table.insert(rarityGroups, rarityGroup)
-    end
-
-    -- If no rarity groups are available, return nil
-    if #rarityGroups == 0 then
-        return nil
-    end
-
-    -- Sort the rarity groups in ascending order
-    table.sort(rarityGroups)
-
-    -- Find the index of the current rarity group
-    local currentIndex = nil
-    for i, rarityGroup in ipairs(rarityGroups) do
-        if rarityGroup == currentRarityGroup then
-            currentIndex = i
-            break
-        end
-    end
-
-    -- If the current rarity group is not found, start from the first one
-    if not currentIndex then
-        currentIndex = 1
-    end
-
-    -- Get the next rarity group (wrap around if necessary)
-    local nextIndex = currentIndex + 1
-    if nextIndex > #rarityGroups then
-        nextIndex = 1
-    end
-    return rarityGroups[nextIndex]
-end
-
-function getNextPetRarityGroup(currentRarityGroup)
-    
-    -- Extract all rarity groups for the given mount type
-    local rarityGroups = {}
-    for rarityGroup in pairs(MountRouletteDB.pets.unsummoned) do
-        table.insert(rarityGroups, rarityGroup)
-    end
-
-    -- If no rarity groups are available, return nil
-    if #rarityGroups == 0 then
-        return nil
-    end
-
-    -- Sort the rarity groups in ascending order
-    table.sort(rarityGroups)
-
-    -- Find the index of the current rarity group
-    local currentIndex = nil
-    for i, rarityGroup in ipairs(rarityGroups) do
-        if rarityGroup == currentRarityGroup then
-            currentIndex = i
-            break
-        end
-    end
-
-    -- If the current rarity group is not found, start from the first one
-    if not currentIndex then
-        currentIndex = 1
-    end
-
-    -- Get the next rarity group (wrap around if necessary)
-    local nextIndex = currentIndex + 1
-    if nextIndex > #rarityGroups then
-        nextIndex = 1
-    end
-    return rarityGroups[nextIndex]
-end
-
-function getAndMoveRandomMount(currentRarityGroup, mountType)
-    -- Ensure mountType is valid
-    if not MountRouletteDB.mounts.unsummoned[mountType] then
-        error("Invalid mount type: " .. tostring(mountType))
-    end
-
-    -- Get the next rarity group
-    local nextRarityGroup = getNextMountRarityGroup(currentRarityGroup, mountType)
-    if not nextRarityGroup then
-        return nil  -- No unsummoned mounts available
-    end
-
-    -- Get all mounts in the next rarity group
-    local mounts = MountRouletteDB.mounts.unsummoned[mountType][nextRarityGroup]
-
-    -- Check if the mounts table is empty
-    local isEmpty = true
-    for _ in pairs(mounts) do
-        isEmpty = false
-        break
-    end
-
-    if isEmpty then
-        -- No mounts left in this rarity group, reset the unsummoned list
-        MountRouletteDB.mounts.unsummoned[mountType][nextRarityGroup] = MountRouletteDB.mounts.summoned[mountType][nextRarityGroup] or {}
-        MountRouletteDB.mounts.summoned[mountType][nextRarityGroup] = {}
-        mounts = MountRouletteDB.mounts.unsummoned[mountType][nextRarityGroup]
-    end
-
-    -- Convert the mounts table to an array for easier random selection
-    local mountArray = {}
-    for mountID, mountData in pairs(mounts) do
-        table.insert(mountArray, mountData)
-    end
-
-    -- Select a random mount
-    if #mountArray > 0 then
-        local randomIndex = math.random(1, #mountArray)
-        local selectedMount = mountArray[randomIndex]
-
-        -- Move the selected mount from unsummoned to summoned
-        MountRouletteDB.mounts.unsummoned[mountType][nextRarityGroup][selectedMount.mountID] = nil
-        MountRouletteDB.mounts.summoned[mountType][nextRarityGroup] = MountRouletteDB.mounts.summoned[mountType][nextRarityGroup] or {}
-        MountRouletteDB.mounts.summoned[mountType][nextRarityGroup][selectedMount.mountID] = selectedMount
-
-        return selectedMount
+-- Helper: Get Rarity Color Code
+local function GetRarityColor(rarity)
+    local r = rarity or 100
+    if r < 20.0 then
+        return "|cffff8000" -- Legendary (Orange)
+    elseif r < 40.0 then
+        return "|cffa335ee" -- Epic (Purple)
+    elseif r < 60.0 then
+        return "|cff0070dd" -- Rare (Blue)
     else
-        return nil  -- No mounts found (should not happen after reset)
+        return "|cff1eff00" -- Common (Green)
     end
 end
 
-function getAndMoveRandomPet(currentRarityGroup)
-
-     -- Get the next rarity group
-    local nextRarityGroup = getNextPetRarityGroup(currentRarityGroup)
-    if not nextRarityGroup then
-        return nil  -- No unsummoned pets available
-    end
-
-    -- Get all pets in the next rarity group
-    local pets = MountRouletteDB.pets.unsummoned[nextRarityGroup]
-
-    -- Check if the pets table is empty
-    local isEmpty = true
-    for _ in pairs(pets) do
-        isEmpty = false
-        break
-    end
-
-    if isEmpty then
-        -- No pets left in this rarity group, reset the unsummoned list
-        MountRouletteDB.pets.unsummoned[nextRarityGroup] = MountRouletteDB.pets.summoned[nextRarityGroup] or {}
-        MountRouletteDB.pets.summoned[nextRarityGroup] = {}
-        pets = MountRouletteDB.pets.unsummoned[nextRarityGroup]
-    end
-
-    -- Convert the pets table to an array for easier random selection
-    local petArray = {}
-    for mountID, mountData in pairs(pets) do
-        table.insert(petArray, mountData)
-    end
-
-    -- Select a random mount
-    if #petArray > 0 then
-        local randomIndex = math.random(1, #petArray)
-        local selectedPet = petArray[randomIndex]
-
-        -- Move the selected petfrom unsummoned to summoned
-        MountRouletteDB.pets.unsummoned[nextRarityGroup][selectedPet.petID] = nil
-        MountRouletteDB.pets.summoned[nextRarityGroup] = MountRouletteDB.pets.summoned[nextRarityGroup] or {}
-        MountRouletteDB.pets.summoned[nextRarityGroup][selectedPet.petID] = selectedPet
-
-        return selectedPet
-    else
-        return nil  -- No mounts found (should not happen after reset)
-    end
+-- Helper: Check Mount Category
+-- Using IDs from WoW Wiki/API
+-- Flying: 248 (Classic Flying), 247 (Red Flying Cloud), 402 (Dragonriding/Regular Flying in new patches), 407, 412, etc.
+-- Ground: 230, 269, 284, 242...
+-- Aquatic: 231, 232, 254
+local function IsFlyingMount(typeID)
+    return typeID == 248 or typeID == 247 or typeID == 402 or typeID == 407 or typeID == 412 or typeID == 424
 end
 
-function countTotalItemsInTable(t)
-    local totalCount = 0
-    for _, subTable in pairs(t) do
-        if type(subTable) == "table" then
-            for _ in pairs(subTable) do
-                totalCount = totalCount + 1
-            end
-        end
-    end
-    return totalCount
+local function IsAquaticMount(typeID)
+    return typeID == 231 or typeID == 232 or typeID == 254
 end
 
-function saveMountsToVariable()
-    local totalUnsummonedMounts = 0
-    if MountRouletteDB.mounts and MountRouletteDB.mounts.unsummoned then
-        totalUnsummonedMounts = countTotalItemsInTable(MountRouletteDB.mounts.unsummoned) or 0
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[PetAndMountSummonRoulette]|r " .. totalUnsummonedMounts .. " number of unsummoned mounts")
-    end
+-- Grouping Logic: Hybrid Strategy
+local function CreateHybridGroups(items)
+    local groups = {}
     
-    if MountRouletteDB.mounts and MountRouletteDB.mounts.unsummoned and totalUnsummonedMounts > 0 then
-        MountRouletteDB.mounts = MountRouletteDB.mounts or {
-            summoned = { ground = {}, flying = {}, aquatic = {} },
-            unsummoned = { ground = {}, flying = {}, aquatic = {} }
-        }
-        
-    else MountRouletteDB.mounts = {
-        summoned = { ground = {}, flying = {}, aquatic = {} },
-        unsummoned = { ground = {}, flying = {}, aquatic = {} }
-    }
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[PetAndMountSummonRoulette]|r " .. "var does not exists")
-    end
-
-    C_MountJournal.SetDefaultFilters()
-    for i = 1, C_MountJournal.GetNumDisplayedMounts() do
-        local name, spellID, icon, isActive, isUsable, sourceType, isFavorite, isFactionSpecific, faction, shouldHideOnChar, isCollected, mountID = C_MountJournal.GetDisplayedMountInfo(i)
-
-        if mountID and isCollected then
-            local creatureDisplayInfoID, description, source, isSelfMount, mountTypeID, uiModelSceneID, animID, spellVisualKitID, disablePlayerMountPreview = C_MountJournal.GetMountInfoExtraByID(mountID)
-
-            local isGround, isFlying, isAquatic = getMountCriteria(mountTypeID)
-
-            local rarityGroup = getConfiguredRarityGroup(mountID, true)
-            -- Save mount information in the appropriate category
-            local mountData = {
-                name = name,
-                mountID = mountID
-            }
-
-            if isGround then
-                MountRouletteDB.mounts.unsummoned.ground[rarityGroup] = MountRouletteDB.mounts.unsummoned.ground[rarityGroup] or {}
-                MountRouletteDB.mounts.unsummoned.ground[rarityGroup][mountID] = mountData
-            end
-            if isFlying then
-                MountRouletteDB.mounts.unsummoned.flying[rarityGroup] = MountRouletteDB.mounts.unsummoned.flying[rarityGroup] or {}
-                MountRouletteDB.mounts.unsummoned.flying[rarityGroup][mountID] = mountData
-            end
-            if isAquatic then
-                MountRouletteDB.mounts.unsummoned.aquatic[rarityGroup] = MountRouletteDB.mounts.unsummoned.aquatic[rarityGroup] or {}
-                MountRouletteDB.mounts.unsummoned.aquatic[rarityGroup][mountID] = mountData
-            end
-        end
-    end
-end
-
-function savePetsToVariable()
-    local totalUnsummonedPets = 0
-    if MountRouletteDB.pets and MountRouletteDB.pets.unsummoned then
-        totalUnsummonedPets = countTotalItemsInTable(MountRouletteDB.pets.unsummoned) or 0
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[PetAndMountSummonRoulette]|r " .. totalUnsummonedPets .. " number of unsummoned pets")
-    end
+    local rares = {}
+    local commons = {} 
     
-    if MountRouletteDB.pets and MountRouletteDB.pets.unsummoned and totalUnsummonedPets > 0 then
-        MountRouletteDB.pets = MountRouletteDB.pets or {
-            summoned = { },
-            unsummoned = { }
-        }
-    else 
-        MountRouletteDB.pets = {
-            summoned = { },
-            unsummoned = { }
-        }
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[PetAndMountSummonRoulette]|r " .. "Pet database reset")
-    end
-
-    -- Clear pet journal filters to ensure we see all pets
-    C_PetJournal.SetAllPetTypesChecked(true)
-    C_PetJournal.ClearSearchFilter()
-    
-    local totalPetsFound = 0
-    for i = 1, C_PetJournal.GetNumPets() do
-        local petID, speciesID, owned, customName, level, favorite, isRevoked, speciesName, icon, petType, companionID, tooltip, description, isWild, canBattle, isTradeable, isUnique, obtainable = C_PetJournal.GetPetInfoByIndex(i)
-
-        if speciesID and owned then
-            local rarityGroup = getConfiguredRarityGroup(speciesID, false)
-            totalPetsFound = totalPetsFound + 1
-
-            -- Save pet information in the appropriate category
-            local petData = {
-                name = speciesName,
-                petID = petID,
-                speciesID = speciesID
-            }
-            MountRouletteDB.pets.unsummoned[rarityGroup] = MountRouletteDB.pets.unsummoned[rarityGroup] or {}
-            MountRouletteDB.pets.unsummoned[rarityGroup][petID] = petData
-        end
-    end
-    
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[PetAndMountSummonRoulette]|r " .. totalPetsFound .. " pets loaded into database")
-end
-
-function getMountRidingCriteria()
-    if IsIndoors() or UnitOnTaxi("player") then
-        return nil -- Mounting is completely disabled
-    end
-
-    if IsSubmerged("player") then
-        return "aquatic"
-    end
-
-    if IsFlyableArea() then
-        return "flying"
-    end
-
-    if not IsFlyableArea() and not IsSubmerged("player") then
-        return "ground"
-    end
-
-    return nil -- Fallback case: No valid mount criteria
-end
-
-function summonRandomMount()
-    -- Check if mount summoning is enabled
-    if not isFeatureEnabled("mounts") then
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[PetAndMountSummonRoulette]|r " .. "Mount summoning is disabled in options.")
-        return
-    end
-
-    local mountRidingCriteria = getMountRidingCriteria()
-
-    if not mountRidingCriteria then
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[PetAndMountSummonRoulette]|r " .. "No mounts allowed.")
-        return
-    end
-
-    local lastMountRarityGroup = 0
-    
-    if MountRouletteDB.lastMountRarityGroup and MountRouletteDB.lastMountRarityGroup[mountRidingCriteria] then
-        lastMountRarityGroup = MountRouletteDB.lastMountRarityGroup[mountRidingCriteria]
-    else
-        MountRouletteDB.lastMountRarityGroup = {
-            ground = {},
-            flying = {},
-            aquatic = {}
-        }
-    end
-    local rarityGroup = getNextMountRarityGroup(lastMountRarityGroup, mountRidingCriteria)
-    local selectedMount = getAndMoveRandomMount(rarityGroup, mountRidingCriteria)
-
-    if selectedMount then
-        -- Get group name for better messaging
-        local groupName = "Unknown"
-        if MountRouletteDB.config and MountRouletteDB.config.rarityGroups and MountRouletteDB.config.rarityGroups[rarityGroup] then
-            groupName = MountRouletteDB.config.rarityGroups[rarityGroup].name
-        end
-        
-        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[PetAndMountSummonRoulette]|r " .. "Summoning " .. selectedMount.name .. " from " .. groupName .. " group.")
-        C_MountJournal.SummonByID(selectedMount.mountID)
-        if MountRouletteDB.lastMountRarityGroup and MountRouletteDB.lastMountRarityGroup[mountRidingCriteria] then
-            MountRouletteDB.lastMountRarityGroup[mountRidingCriteria] = rarityGroup
+    for _, item in ipairs(items) do
+        if (item.rarity or 100) < RARITY_THRESHOLD then
+            table.insert(rares, item)
         else
-            MountRouletteDB.lastMountRarityGroup = MountRouletteDB.lastMountRarityGroup or {}
-            MountRouletteDB.lastMountRarityGroup[mountRidingCriteria] = rarityGroup
+            table.insert(commons, item)
         end
+    end
+    
+    -- 1. Process Rares
+    table.sort(rares, RaritySort)
+    local currentChunk = {}
+    for _, item in ipairs(rares) do
+        table.insert(currentChunk, item)
+        if #currentChunk >= RARE_GROUP_SIZE then
+            table.insert(groups, currentChunk)
+            currentChunk = {}
+        end
+    end
+    if #currentChunk > 0 then
+        table.insert(groups, currentChunk)
+    end
+    
+    -- 2. Process Commons
+    local buckets = {}
+    for i = 5, 10 do buckets[i] = {} end
+    
+    for _, item in ipairs(commons) do
+        local r = item.rarity or 100
+        local bucketIndex = math.floor(r / 10)
+        if bucketIndex < 5 then bucketIndex = 5 end
+        if bucketIndex > 10 then bucketIndex = 10 end
+        
+        table.insert(buckets[bucketIndex], item)
+    end
+    
+    for i = 5, 10 do
+        if #buckets[i] > 0 then
+            table.sort(buckets[i], RaritySort)
+            table.insert(groups, buckets[i])
+        end
+    end
+    
+    return groups
+end
+
+
+-- Initialize Dynamic Mount Groups
+local function InitializeMounts()
+    local allCollectedMounts = {}
+    
+    local numMounts = C_MountJournal.GetNumMounts()
+    for i = 1, numMounts do
+        local name, spellID, icon, isActive, isUsable, sourceType, isFavorite, isFactionSpecific, faction, shouldHideOnChar, isCollected, mountID = C_MountJournal.GetMountInfoByID(i)
+        
+        if mountID and isCollected and (not shouldHideOnChar) then
+             local rarity = PetMountSummonRouletteData.mountRarity[mountID] or 100
+             -- Capture Mount Type
+             local _, _, _, _, mountTypeID = C_MountJournal.GetMountInfoExtraByID(mountID)
+             
+             table.insert(allCollectedMounts, {
+                 mountID = mountID,
+                 name = name,
+                 rarity = rarity,
+                 spellID = spellID,
+                 mountTypeID = mountTypeID
+             })
+        end
+    end
+    
+    sessionState.mountGroups = CreateHybridGroups(allCollectedMounts)
+    sessionState.mountsInitialized = true
+    
+    if MountRouletteDB.lastMountGroupIndex and MountRouletteDB.lastMountGroupIndex <= #sessionState.mountGroups then
+        sessionState.currentMountGroup = MountRouletteDB.lastMountGroupIndex
     else
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[PetAndMountSummonRoulette]|r " .. "No mounts available for summoning.")
+        sessionState.currentMountGroup = 1
     end
 end
 
-function summonRandomPet()
-    -- Check if pet summoning is enabled
-    if not isFeatureEnabled("pets") then
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[PetAndMountSummonRoulette]|r " .. "Pet summoning is disabled in options.")
-        return
+-- Initialize Dynamic Pet Groups
+local function InitializePets()
+    local allCollectedPets = {}
+    C_PetJournal.ClearSearchFilter()
+    local numPets = C_PetJournal.GetNumPets()
+    
+    for i = 1, numPets do
+        local petID, speciesID, owned, customName, level, favorite, isRevoked, speciesName, icon, petType, companionID, tooltip, description, isWild, canBattle, isTradeable, isUnique, obtainable = C_PetJournal.GetPetInfoByIndex(i)
+        
+        if owned and speciesID then
+             local rarity = PetMountSummonRouletteData.petRarity[speciesID] or 100
+             table.insert(allCollectedPets, {
+                 petID = petID,
+                 speciesID = speciesID,
+                 name = customName or speciesName,
+                 rarity = rarity
+             })
+        end
     end
+    
+    sessionState.petGroups = CreateHybridGroups(allCollectedPets)
+    sessionState.petsInitialized = true
+    
+    if MountRouletteDB.lastPetGroupIndex and MountRouletteDB.lastPetGroupIndex <= #sessionState.petGroups then
+        sessionState.currentPetGroup = MountRouletteDB.lastPetGroupIndex
+    else
+        sessionState.currentPetGroup = 1
+    end
+end
 
-    local rarityGroup = getNextPetRarityGroup(MountRouletteDB.lastPetRarityGroup or 0)
-    local selectedPet = getAndMoveRandomPet(rarityGroup)
 
-    if selectedPet then
-        -- Get group name for better messaging
-        local groupName = "Unknown"
-        if MountRouletteDB.config and MountRouletteDB.config.rarityGroups and MountRouletteDB.config.rarityGroups[rarityGroup] then
-            groupName = MountRouletteDB.config.rarityGroups[rarityGroup].name
+-- Core Logic: Summon Mount
+local function SummonRandomMount()
+    if not sessionState.mountsInitialized then InitializeMounts() end
+    
+    -- Determine Environment
+    local isSubmerged = IsSubmerged()
+    local isFlyable = IsFlyableArea()
+    
+    -- Safety Limit: prevent infinite loops if no suitable mount exists in ANY group (unlikely but possible)
+    local parsedGroups = 0
+    local totalGroups = #sessionState.mountGroups
+    
+    -- We will try to find a suitable mount by cycling through groups until we find one that has candidates.
+    while parsedGroups < totalGroups do
+        local groupIndex = sessionState.currentMountGroup
+        local group = sessionState.mountGroups[groupIndex]
+        
+        parsedGroups = parsedGroups + 1
+        
+        if group and #group > 0 then
+            -- Filter candidates in this group based on environment
+            local candidates = {}
+            for _, mount in ipairs(group) do
+                local valid = false
+                
+                -- Is it usable at all?
+                local _, _, _, _, isUsable = C_MountJournal.GetMountInfoByID(mount.mountID)
+                
+                if isUsable then
+                    if isSubmerged then
+                        -- Underwater: Prefer Aquatic, but standard swimming mounts work too
+                        if IsAquaticMount(mount.mountTypeID) then valid = true end
+                        -- Fallback for underwater? Usually people want aquatic speed.
+                        -- If we only select aquatic, and user has none in this group, we skip. Correct.
+                    elseif isFlyable then
+                        -- Flying Area: Prefer Flying
+                        if IsFlyingMount(mount.mountTypeID) then valid = true end
+                    else
+                        -- Ground Area: Prefer Ground (Non-Flying, Non-Aquatic usually, but Flying mounts work on ground too)
+                        -- User request: "if flying is not allowed, it should only summon ground mounts"
+                        -- Often Flying mounts look awkward on ground or user specifically wants ground mounts.
+                        -- However, many "Flying" mounts are perfectly fine ground mounts.
+                        -- STRICT interpretation: Filter OUT flying mounts?
+                        -- "it should only summon ground mounts" -> likely implies excluding large drakes etc.
+                        -- Let's exclude Explicit Flying Types for Ground logic relative to the request.
+                        if not IsFlyingMount(mount.mountTypeID) and not IsAquaticMount(mount.mountTypeID) then
+                             valid = true 
+                        end
+                        -- Note: IsFlyingMount(typeID) is checking the TYPE, not capability. 
+                        -- Many users prefer this separation.
+                    end
+                end
+                
+                if valid then
+                    table.insert(candidates, mount)
+                end
+            end
+            
+            -- If we found candidates in this group, summon one!
+            if #candidates > 0 then
+                local randomIndex = math.random(1, #candidates)
+                local mount = candidates[randomIndex]
+                
+                C_MountJournal.SummonByID(mount.mountID)
+                
+                local color = GetRarityColor(mount.rarity)
+                local groupInfo = "Group " .. groupIndex .. " (Rarity: " .. string.format("%.2f", mount.rarity) .. "%)"
+                PrintMessage("Summoning " .. color .. mount.name .. "|r from " .. groupInfo)
+                
+                -- Always cycle group after a successful summon (or attempt)
+                sessionState.currentMountGroup = (sessionState.currentMountGroup % totalGroups) + 1
+                MountRouletteDB.lastMountGroupIndex = sessionState.currentMountGroup
+                return 
+            end
         end
         
-        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[PetMountSummonRoulette]|r " .. "Summoning " .. selectedPet.name .. " from " .. groupName .. " group.")
-        C_PetJournal.SummonPetByGUID(selectedPet.petID)
-        MountRouletteDB.lastPetRarityGroup = rarityGroup
-    else
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[PetMountSummonRoulette]|r " .. "No pets available for summoning.")
+        -- If no candidates found in this group, move to the next group and continue search
+        sessionState.currentMountGroup = (sessionState.currentMountGroup % totalGroups) + 1
     end
+    
+    -- Fallback: If we cycled through ALL groups and found nothing matching the strict criteria 
+    -- (e.g. underwater but owns no aquatic mounts), try again with ANY usable mount.
+    
+    parsedGroups = 0
+    while parsedGroups < totalGroups do
+        local groupIndex = sessionState.currentMountGroup
+        local group = sessionState.mountGroups[groupIndex]
+        parsedGroups = parsedGroups + 1
+        
+         if group and #group > 0 then
+             local candidates = {}
+             for _, mount in ipairs(group) do
+                 local _, _, _, _, isUsable = C_MountJournal.GetMountInfoByID(mount.mountID)
+                 if isUsable then table.insert(candidates, mount) end
+             end
+             
+             if #candidates > 0 then
+                local randomIndex = math.random(1, #candidates)
+                local mount = candidates[randomIndex]
+                C_MountJournal.SummonByID(mount.mountID)
+                local color = GetRarityColor(mount.rarity)
+                PrintMessage("Summoning (Fallback) " .. color .. mount.name .. "|r from Group " .. groupIndex)
+                
+                sessionState.currentMountGroup = (sessionState.currentMountGroup % totalGroups) + 1
+                MountRouletteDB.lastMountGroupIndex = sessionState.currentMountGroup
+                return
+             end
+         end
+         sessionState.currentMountGroup = (sessionState.currentMountGroup % totalGroups) + 1
+    end
+    
+    PrintError("No usable mounts found in collection.")
+end
+
+-- Core Logic: Summon Pet
+local function SummonRandomPet()
+    if not sessionState.petsInitialized then InitializePets() end
+    
+    local groupIndex = sessionState.currentPetGroup
+    local group = sessionState.petGroups[groupIndex]
+    
+    if not group then return end
+    
+    local randomIndex = math.random(1, #group)
+    local pet = group[randomIndex]
+    
+    C_PetJournal.SummonPetByGUID(pet.petID)
+    
+    local color = GetRarityColor(pet.rarity)
+    local groupInfo = "Group " .. groupIndex .. " (Rarity: " .. string.format("%.2f", pet.rarity) .. "%)"
+    PrintMessage("Summoning " .. color .. pet.name .. "|r from " .. groupInfo)
+    
+     sessionState.currentPetGroup = sessionState.currentPetGroup + 1
+     if sessionState.currentPetGroup > #sessionState.petGroups then
+         sessionState.currentPetGroup = 1
+     end
+     MountRouletteDB.lastPetGroupIndex = sessionState.currentPetGroup
 end
 
 
-frame = CreateFrame("Frame")
-frame:RegisterEvent("PLAYER_LOGIN")
-frame:RegisterEvent("COMPANION_UPDATE")
-
+-- Event Registration
+local frame = CreateFrame("Frame")
 frame:SetScript("OnEvent", function(self, event, ...)
     if event == "PLAYER_LOGIN" then
-        saveMountsToVariable()
-        savePetsToVariable()
-        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[PetAndMountSummonRoulette]|r " .. "Mount & Pet Database refreshed")
+        C_Timer.After(1, function()
+             InitializeMounts()
+             InitializePets()
+             PrintMessage("Database Refreshed. Dynamic Groups Ready.")
+        end)
+    elseif event == "NEW_MOUNT_ADDED" then
+        local mountID = ...
+        InitializeMounts() -- Re-init to sort new mount
+        -- Optional: Print message? 
+        -- PrintMessage("New mount detect! Re-sorting groups.")
+    elseif event == "NEW_PET_ADDED" then
+        local petID = ...
+        InitializePets()
     end
 end)
+frame:RegisterEvent("NEW_MOUNT_ADDED")
+frame:RegisterEvent("NEW_PET_ADDED")
+frame:RegisterEvent("PLAYER_LOGIN")
 
-
+-- Slash Commands
 SLASH_PMSRMOUNT1 = "/pmsrmount"
 SlashCmdList["PMSRMOUNT"] = function()
-    summonRandomMount()
+    SummonRandomMount()
 end
 
 SLASH_PMSRPET1 = "/pmsrpet"
 SlashCmdList["PMSRPET"] = function()
-    summonRandomPet()
+    SummonRandomPet()
 end
 
 SLASH_PMSRPETDISMISS1 = "/pmsrpetdismiss"
 SlashCmdList["PMSRPETDISMISS"] = function()
-    C_PetBattles.ForceEnd()
+    C_PetBattles.ForceEnd() 
 end
 
--- Global reference to our options panel
-local optionsPanel = nil
-
-SLASH_PMSROPTIONS1 = "/pmsroptions"
-SLASH_PMSROPTIONS2 = "/pmsrconfig"
-SlashCmdList["PMSROPTIONS"] = function()
-    -- Direct panel access - most reliable method
-    if optionsPanel then
-        if optionsPanel:IsShown() then
-            optionsPanel:Hide()
-        else
-            optionsPanel:Show()
-            optionsPanel:Raise() -- Bring to front
-        end
-    else
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[PetAndMountSummonRoulette]|r Options panel not loaded yet. Try again in a moment or /reload")
-    end
-end
-
--- Function to set the global panel reference (called from options file)
-function SetOptionsPanel(panel)
-    optionsPanel = panel
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[PetAndMountSummonRoulette]|r Options panel ready! Use /pmsroptions to open")
-end
--- Debug command to check pet database status
 SLASH_PMSRDEBUG1 = "/pmsrdebug"
 SlashCmdList["PMSRDEBUG"] = function()
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[PetAndMountSummonRoulette]|r === DEBUG INFO ===")
+    PrintMessage("Debug Info (Hybrid Grouping):")
+    PrintMessage("Mount Groups: " .. #sessionState.mountGroups)
     
-    -- Check if pet database exists
-    if MountRouletteDB.pets and MountRouletteDB.pets.unsummoned then
-        local totalPets = countTotalItemsInTable(MountRouletteDB.pets.unsummoned)
-        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[PetAndMountSummonRoulette]|r Total pets in database: " .. totalPets)
-        
-        -- Show pets by group
-        for groupId, pets in pairs(MountRouletteDB.pets.unsummoned) do
-            local count = 0
-            for _ in pairs(pets) do
-                count = count + 1
-            end
-            local groupName = "Group " .. groupId
-            if MountRouletteDB.config and MountRouletteDB.config.rarityGroups and MountRouletteDB.config.rarityGroups[groupId] then
-                groupName = MountRouletteDB.config.rarityGroups[groupId].name
-            end
-            DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[PetAndMountSummonRoulette]|r " .. groupName .. ": " .. count .. " pets")
+    -- Show info about groups
+    for i, group in ipairs(sessionState.mountGroups) do
+        local first = group[1]
+        local last = group[#group]
+        local r1 = first and first.rarity or 0
+        local r2 = last and last.rarity or 0
+        -- Shorten output
+        if i <= 3 or i >= #sessionState.mountGroups - 2 then
+             PrintMessage(string.format(" G%d: %d items (%.1f%% - %.1f%%)", i, #group, r1, r2))
         end
-    else
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[PetAndMountSummonRoulette]|r Pet database not initialized!")
     end
     
-    -- Check configuration
-    if MountRouletteDB.config and MountRouletteDB.config.rarityGroups then
-        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[PetAndMountSummonRoulette]|r Configuration groups: " .. #MountRouletteDB.config.rarityGroups)
-        DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[PetAndMountSummonRoulette]|r Pets enabled: " .. tostring(MountRouletteDB.config.enablePets))
-    else
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[PetAndMountSummonRoulette]|r Configuration not loaded!")
-    end
-    
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[PetAndMountSummonRoulette]|r === END DEBUG ===")
+    PrintMessage("Current Mount Group Index: " .. sessionState.currentMountGroup)
+    PrintMessage("Environment: Flight=" .. tostring(IsFlyableArea()) .. ", Submerged=" .. tostring(IsSubmerged()))
 end
 
--- Force refresh command
 SLASH_PMSRREFRESH1 = "/pmsrrefresh"
 SlashCmdList["PMSRREFRESH"] = function()
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[PetAndMountSummonRoulette]|r Refreshing pet and mount databases...")
-    saveMountsToVariable()
-    savePetsToVariable()
-    DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00[PetAndMountSummonRoulette]|r Database refresh complete!")
+    InitializeMounts()
+    InitializePets()
+    PrintMessage("Refreshed.")
 end
