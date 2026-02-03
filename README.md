@@ -37,8 +37,8 @@ This addon relies on external data to determine rarity. To update the rarity per
      ```
    - The script will automatically:
      - Check [DataForAzeroth](https://www.dataforazeroth.com) for the latest data versions.
-     - Download the JSON files (showing the source filename for verification).
-     - Update `PetMountSummonRouletteData.lua` with the new values.
+     - Compare with your local `manifest.json` (created by the script) to avoid unnecessary downloads.
+     - Download and update `PetMountSummonRouletteData.lua` only if new data is found.
 
 2. **Reload WoW**:
    - If WoW is running, type `/reload` to load the new data.
