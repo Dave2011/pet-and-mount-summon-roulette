@@ -28,25 +28,19 @@ Use the following slash commands in-game:
 
 This addon relies on external data to determine rarity. To update the rarity percentages with the latest data:
 
-1. **Obtain Data**:
-   - Go to [DataForAzeroth](https://www.dataforazeroth.com).
-   - Export or download the JSON data for **Mounts** and **Pets**.
-   - Rename the files to `mounts.json` and `pets.json` respectively.
-
-2. **Place Files**:
-   - Move `mounts.json` and `pets.json` into this addon's directory:
-     `.../Interface/AddOns/PetMountSummonRoulette/`
-
-3. **Run Converter**:
+1. **Run the Updater**:
    - You need Python installed on your system.
    - Open a terminal/command prompt in the addon directory.
-   - Run the conversion script:
+   - Run the script:
      ```bash
      python3 convert_data.py
      ```
-   - This will generate a new `PetMountSummonRouletteData.lua` file with the latest rarity values.
+   - The script will automatically:
+     - Check [DataForAzeroth](https://www.dataforazeroth.com) for the latest data versions.
+     - Download the JSON files (showing the source filename for verification).
+     - Update `PetMountSummonRouletteData.lua` with the new values.
 
-4. **Reload WoW**:
+2. **Reload WoW**:
    - If WoW is running, type `/reload` to load the new data.
 
 ## Release Process

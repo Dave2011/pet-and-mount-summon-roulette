@@ -6,3 +6,5 @@ mountlist.py
 .vscode
 FEATURES.md
 convert_data.py
+mounts.json
+pets.json
