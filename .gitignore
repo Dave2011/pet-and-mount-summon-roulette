@@ -7,4 +7,5 @@ mountlist.py
 FEATURES.md
 convert_data.py
 mounts.json
-pets.jsonmanifest.json
+pets.json
+manifest.json
